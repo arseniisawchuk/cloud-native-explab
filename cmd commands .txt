@@ -1,0 +1,39 @@
+git token
+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 
+
+set GITHUB_TOKEN="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"
+set GITHUB_REPO=cloud-native-explab
+set GITHUB_USER=arseniisawchuk
+
+set KUBECONFIG=c:\users\ArsHome\kubeconfig-cne13.yaml 
+
+flux bootstrap github  --owner=arseniisawchuk   --repository=cloud-native-explab   --branch=main  --path=./clusters/gorilla/cne13   --components-extra=image-reflector-controller,image-automation-controller   --read-write-key  --personal         
+
+
+flux create source git cloud-native-explab --url=https://github.com/arseniisawchuk/cloud-native-explab/ --branch=main  --interval=30s   --export > ./clusters/cne13-source.yaml
+  
+  
+
+flux create kustomization infrastructure  --source=GitRepository/flux-system   --path="./infrastructure/gorilla/cne13"   --prune=true   --interval=5m0s   --export > ./clusters/gorilla/cne13/infrastructure-sync.yaml
+
+flux create kustomization infrastructure  --source=GitRepository/cloud-native-explab   --path="./infrastructure/gorilla/cne13"   --prune=true   --interval=5m0s   --export > ./infrastructure-sync.yaml
+
+
+
+flux create source helm prometheus-community   --url=https://prometheus-community.github.io/helm-charts     --interval=10m0s   --export > observability/prometheus-community-source.yaml
+
+flux create hr kube-prometheus-stack     --source=HelmRepository/prometheus-community     --chart=kube-prometheus-stack     --chart-version="39.5.0" --target-namespace=observability     --create-target-namespace=false     --export > observability/kube-prometheus-stack.yaml
+
+# create a Helm source for Grafana charts and for the individual releases
+flux create source helm grafana-charts     --url=https://grafana.github.io/helm-charts --interval=10m0s --export > observability/grafana-charts-source.yaml
+
+flux create hr tempo --source=HelmRepository/grafana-charts --chart=tempo --chart-version=">=0.15.0 <0.16.0" --target-namespace=observability --create-target-namespace=false --export > observability/tempo-release.yaml
+
+flux create hr promtail     --source=HelmRepository/grafana-charts --chart=promtail --chart-version=">=2.6.0 <2.7.0" --target-namespace=observability  --create-target-namespace=false  --export > observability/promtail-release.yaml
+
+flux create hr loki --source=HelmRepository/grafana-charts  --chart=loki --chart-version=">=2.13.0 <2.13.0" --target-namespace=observability --create-target-namespace=false --export > observability/loki-release.yaml
+
+# to manually trigger the GitOps process use the following commands
+flux reconcile source git flux-system
+flux reconcile kustomization infrastructure
+flux get all
